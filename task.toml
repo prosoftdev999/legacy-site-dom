@@ -1,0 +1,30 @@
+artifacts = ["/app/output/page_dom.json"]
+
+[task]
+name = "afterquery/legacy-site-dom"
+
+[metadata]
+author_name = "Thomas Morison"
+author_email = "matiasv931026@gmail.com"
+difficulty_explanation = "This is the work a web engineer does when moving an old Apache site with server-side includes to a static host and needing proof that every page keeps the document browsers actually built. The site, its 1,649 page URLs and the server config are synthetic, made by a generator for this task, but the answers were not: the document root was served by the stock httpd:2.4.65 image with the shipped httpd.conf and the original .htaccess files, and headless Chromium 153.0.8010.12 loaded each URL while its DOM was read through the DevTools protocol. The same session was recorded twice against two server instances: the trees were identical, and the two logs held the same requests with the same statuses and sizes, differing only in the order of requests made while one page loaded. The solver gets the document root without its .htaccess files and only the later part of the access log. Three things those files decided must be recovered: whether mod_include ran on a file (off, on, or tied to the owner-execute bit), which charset the server declared (in one directory it depends on a second file extension), and whether a sandboxing Content-Security-Policy turned scripting off (for one file-name prefix it differs). The log settles 743 pages through response sizes, the encoding of a percent-encoded photo-credit query, and which noscript pixels were fetched. The other 906 pages need rules fitted per directory on that evidence, and then each page has to be parsed as Chromium parses it, including encoding sniffing, noscript, template and declarative shadow DOM. The live, sports and community pages (733 of them, none among the 60 known trees) carry the old CMS's client-side templates: inert template elements for live-blog entries, box scores and reader comments, plus declarative shadow-root templates that Chromium leaves in place because their host cannot take a shadow root or already has one. Their contents belong to every tree, and the instruction's format requires them; a DevTools reader has to request each template-content fragment separately, because DOM.getDocument with depth -1 returns those fragments without their children. Measured cost of shortcuts, out of 333,445 graded node facts: leaving template contents empty gets 36,044 wrong on 733 pages; serving every unlogged page as httpd.conf alone would (ignoring the lost settings) get 7,652 wrong on 222 pages; treating any execute bit as the XBitHack trigger gets 2,111 wrong on 20 pages; ignoring the file-name prefix gets 413 wrong on 37 pages; ignoring the second extension when fitting the charset gets 123 wrong on 15 pages."
+solution_explanation = "solve.py emulates the server: server.py applies httpd.conf, mime.types and mod_include (include virtual and file, echo with its LAST_MODIFIED and other variables, set, if/elif/else, config timefmt and errmsg) to the files in site.tar, and dom.py parses a response the way Chromium does, using a vendored html5lib 1.1 tree builder extended with Chromium's encoding sniffing, scripting-dependent noscript parsing, template contents, declarative shadow roots and srcdoc frames. For each page in the surviving log it tries every candidate body, decoding and scripting state and keeps those whose response size and implied image requests (the photo-credit query encoded in the document's charset, and pixels inside noscript) match the logged requests, asserting they all give one tree. It then fits, per directory, the SSI rule, the declared charset per extension group and the scripting state per file-name prefix that agree with every logged page, applies every surviving rule set to each of the 906 unlogged pages, and asserts they agree on the tree. It runs in about 25 seconds and reproduces all 1,649 trees exactly."
+verification_explanation = "The verifier only reads /app/output/page_dom.json as JSON and never runs anything the solver produced. tests/expected.json.gz holds the trees Chromium built for all 1,649 URLs. On both sides adjacent text is joined and then text made only of space, tab, line feed, form feed and carriage return is dropped, in the order the instruction gives; content is read only on template elements and frame only on iframes with a srcdoc attribute, and any other key is ignored, as the instruction says. Each page is then flattened into four depth-tagged sequences: elements (including shadow-root modes, template contents and srcdoc frame documents as marker entries), attributes, text, and comments with doctypes. test_every_page_present checks that every URL is present with a list value; test_elements, test_attributes, test_text and test_comments_and_doctypes each fail if any page's sequence differs, and report how many facts differ. The reward is 1 only if all five tests pass. The reference passes; an empty output fails."
+category = "Software"
+subcategory = "Frontend"
+tags = ["html-parsing", "dom", "chromium", "server-side-includes", "apache-httpd", "character-encoding"]
+expert_time_estimate_hours = 6.0
+relevant_experience = "Migrating legacy Apache httpd sites that use server-side includes and .htaccess overrides, and working with the HTML parsing algorithm, character-encoding detection and DOM inspection through the Chrome DevTools protocol."
+
+[verifier]
+timeout_sec = 300.0
+environment_mode = "separate"
+
+[agent]
+timeout_sec = 9000.0
+
+[environment]
+build_timeout_sec = 600.0
+cpus = 2
+memory_mb = 8192
+storage_mb = 10240
+gpus = 0
